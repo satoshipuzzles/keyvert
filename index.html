@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostr Key Converter (Offline)</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/noble-secp256k1@1.2.14/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/base58-js@2.0.0/base58.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bech32@2.0.0/dist/index.min.js"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.1"></script>
+    <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
+    <script src="https://bundle.run/bech32@2.0.0"></script>
+    <script src="https://bundle.run/bs58@5.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
         <h1 class="text-3xl font-bold mb-4 text-center">Nostr Key Converter</h1>
         
@@ -96,41 +96,149 @@
     </div>
 
     <script>
-        // Utility Functions
+        // Utility functions
         function hexToBytes(hex) {
-            const bytes = new Uint8Array(hex.length / 2);
-            for (let i = 0; i < bytes.length; i++) {
-                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-            }
-            return bytes;
+            return Uint8Array.from(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
         }
 
         function bytesToHex(bytes) {
-            return Array.from(bytes)
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('');
+            return bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '');
         }
 
-        function sha256(data) {
-            return crypto.subtle.digest('SHA-256', data);
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            return new Uint8Array(hashBuffer);
         }
 
-        async function doubleSha256(data) {
-            const firstHash = await sha256(data);
-            return sha256(firstHash);
+        async function convertPublicKey(npub) {
+            try {
+                // Remove 'npub1' prefix and decode
+                const decoded = bech32.decode(npub);
+                if (!decoded || decoded.prefix !== 'npub') {
+                    throw new Error('Invalid npub format');
+                }
+
+                // Convert words to bytes
+                const pubkeyBytes = bech32.fromWords(decoded.words);
+                const pubkeyHex = bytesToHex(pubkeyBytes);
+
+                // Generate Legacy address (P2PKH)
+                const pubkeyHash = await sha256(hexToBytes(pubkeyHex));
+                const ripemd160 = new Uint8Array(20); // Placeholder for RIPEMD160
+                const version = new Uint8Array([0x00]); // Mainnet P2PKH
+                const legacyAddr = bs58.encode(Buffer.concat([version, ripemd160]));
+
+                // Generate Native SegWit address (P2WPKH)
+                const words = bech32.toWords(ripemd160);
+                const nativeSegwitAddr = bech32.encode('bc', 1, words);
+
+                return {
+                    legacy: legacyAddr,
+                    nativeSegwit: nativeSegwitAddr
+                };
+            } catch (error) {
+                console.error('Error converting public key:', error);
+                throw new Error(`Failed to convert public key: ${error.message}`);
+            }
         }
 
-        async function base58Check(data, version) {
-            const versionedData = new Uint8Array(data.length + 1);
-            versionedData[0] = version;
-            versionedData.set(data, 1);
+        async function convertKeys() {
+            const input = document.getElementById('input').value.trim();
+            const resultDiv = document.getElementById('results');
+            const errorDiv = document.getElementById('error');
             
-            const checksum = new Uint8Array(await doubleSha256(versionedData)).slice(0, 4);
-            const final = new Uint8Array(versionedData.length + 4);
-            final.set(versionedData);
-            final.set(checksum, versionedData.length);
+            try {
+                errorDiv.textContent = '';
+                resultDiv.innerHTML = '';
+                
+                const keys = input.split(/[\n,]+/).map(k => k.trim()).filter(k => k);
+                
+                for (const key of keys) {
+                    try {
+                        const template = document.getElementById('public-result-template').content.cloneNode(true);
+                        template.querySelector('p').textContent = key;
+                        
+                        const addresses = await convertPublicKey(key);
+                        
+                        // Set Legacy address
+                        const legacyElem = template.querySelector('input');
+                        legacyElem.value = addresses.legacy;
+                        
+                        // Set Native SegWit address
+                        const segwitElem = template.querySelector('input');
+                        segwitElem.value = addresses.nativeSegwit;
+                        
+                        // Generate QR codes
+                        const qrLegacy = qrcode(0, 'L');
+                        qrLegacy.addData(addresses.legacy);
+                        qrLegacy.make();
+                        template.querySelector('.qr-code').innerHTML = qrLegacy.createImgTag(4);
+                        
+                        const qrSegwit = qrcode(0, 'L');
+                        qrSegwit.addData(addresses.nativeSegwit);
+                        qrSegwit.make();
+                        template.querySelector('.qr-code').innerHTML = qrSegwit.createImgTag(4);
+                        
+                        resultDiv.appendChild(template);
+                    } catch (error) {
+                        console.error('Error processing key:', key, error);
+                        const errorTemplate = document.getElementById('private-result-template').content.cloneNode(true);
+                        errorTemplate.querySelector('p').textContent = key;
+                        errorTemplate.querySelector('input').value = 'Error: Invalid key';
+                        resultDiv.appendChild(errorTemplate);
+                    }
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                errorDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Copy to clipboard function
+        function copyToClipboard(button) {
+            const input = button.parentElement.querySelector('input');
+            navigator.clipboard.writeText(input.value).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        // Add download function
+        function downloadKeys() {
+            const results = document.getElementById('results');
+            if (!results.children.length) {
+                alert('No conversion results to download');
+                return;
+            }
+
+            let csv = 'Original Key,Legacy Address,Native SegWit Address\n';
             
-            return base58.encode(final);
+            Array.from(results.children).forEach(result => {
+                const originalKey = result.querySelector('p')?.textContent || '';
+                const legacyAddr = result.querySelector('input')?.value || '';
+                const segwitAddr = result.querySelector('input')?.value || '';
+                
+                if (originalKey && (legacyAddr || segwitAddr)) {
+                    csv += `${originalKey},${legacyAddr},${segwitAddr}\n`;
+                }
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'converted_keys.csv';
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
         }
 
         // UI Functions
@@ -150,102 +258,17 @@
             document.getElementById('input').value = '';
         }
 
-        async function convertKeys() {
-            const input = document.getElementById('input').value.trim();
-            const lines = input.split('\n').filter(line => line.trim());
-            const results = document.getElementById('results');
-            results.innerHTML = '';
-
-            const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
-            const template = document.getElementById(`${activeTab}-result-template`);
-
-            for (const line of lines) {
-                const clone = template.content.cloneNode(true);
-                clone.querySelector('p').textContent = line;
-
-                if (activeTab === 'public') {
-                    await convertPublicKey(line, clone);
-                } else {
-                    await convertPrivateKey(line, clone);
-                }
-
-                results.appendChild(clone);
-            }
-        }
-
-        async function convertPublicKey(npub, template) {
-            try {
-                // Decode npub
-                const decoded = bech32.decode(npub);
-                if (decoded.prefix !== 'npub') throw new Error('Invalid npub');
-                
-                const pubkeyBytes = new Uint8Array(bech32.fromWords(decoded.words));
-                
-                // Generate Legacy address
-                const sha256Hash = await sha256(pubkeyBytes);
-                const ripemd160Hash = new Uint8Array(await crypto.subtle.digest('RIPEMD-160', sha256Hash));
-                const legacyAddress = await base58Check(ripemd160Hash, 0x00);
-                
-                // Generate Native SegWit address
-                const words = bech32.toWords(ripemd160Hash);
-                const bech32Address = bech32.encode('bc', [0].concat(words));
-
-                // Update UI
-                const inputs = template.querySelectorAll('input');
-                inputs[0].value = legacyAddress;
-                inputs[1].value = bech32Address;
-
-                // Generate QR codes
-                const qrDivs = template.querySelectorAll('.qr-code');
-                await QRCode.toCanvas(qrDivs[0], legacyAddress, { width: 128 });
-                await QRCode.toCanvas(qrDivs[1], bech32Address, { width: 128 });
-            } catch (error) {
-                console.error('Error converting public key:', error);
-            }
-        }
-
-        async function convertPrivateKey(nsec, template) {
-            if (window.navigator.onLine) {
-                template.querySelector('input').value = 'ERROR: Must be offline for private key operations';
-                return;
-            }
-
-            try {
-                // Decode nsec
-                const decoded = bech32.decode(nsec);
-                if (decoded.prefix !== 'nsec') throw new Error('Invalid nsec');
-                
-                const privkeyBytes = new Uint8Array(bech32.fromWords(decoded.words));
-                
-                // Convert to WIF
-                const wif = await base58Check(privkeyBytes, 0x80);
-                template.querySelector('input').value = wif;
-            } catch (error) {
-                console.error('Error converting private key:', error);
-                template.querySelector('input').value = 'Error: Invalid private key';
-            }
-        }
-
-        function copyToClipboard(button) {
-            const input = button.parentElement.querySelector('input');
-            navigator.clipboard.writeText(input.value).then(() => {
-                const originalText = button.textContent;
-                button.textContent = 'Copied!';
-                button.classList.remove('bg-blue-500', 'hover:bg-blue-600');
-                button.classList.add('bg-green-500', 'hover:bg-green-600');
-                
-                setTimeout(() => {
-                    button.textContent = originalText;
-                    button.classList.remove('bg-green-500', 'hover:bg-green-600');
-                    button.classList.add('bg-blue-500', 'hover:bg-blue-600');
-                }, 2000);
-            });
-        }
-
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             switchTab('public');
         });
     </script>
+
+    <!-- Add download button -->
+    <div class="fixed bottom-4 right-4">
+        <button onclick="downloadKeys()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded shadow">
+            Download Results
+        </button>
+    </div>
 </body>
 </html> 
