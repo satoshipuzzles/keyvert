@@ -15,6 +15,7 @@ from flask import Flask, jsonify, request, render_template, send_file
 from flask_cors import CORS
 import logging
 import warnings
+from bitcoin_api import BitcoinAPI
 
 app = Flask(__name__)
 CORS(app)
@@ -276,6 +277,9 @@ def get_address_balance(address: str) -> Dict:
 # Initialize CornyCHAT API
 corny_api = CornyChatAPI()
 
+# Initialize Bitcoin API
+bitcoin_api = BitcoinAPI()
+
 # Routes for Key Conversion
 @app.route('/')
 def index():
@@ -318,14 +322,48 @@ def get_qr(address):
         return jsonify({"error": "Failed to generate QR code"}), 500
 
 @app.route('/balance/<address>')
-def check_balance(address):
-    """Get balance for a Bitcoin address."""
+def get_balance(address):
+    """Get balance for a Bitcoin address"""
     try:
-        balance_info = get_address_balance(address)
-        return jsonify(balance_info)
+        address_info = bitcoin_api.get_address_info(address)
+        return jsonify(address_info)
     except Exception as e:
-        logger.error(f"Balance check error: {str(e)}")
-        return jsonify({"error": "Failed to check balance"}), 500
+        logger.error(f"Error getting balance: {e}")
+        return jsonify({
+            "error": str(e),
+            "balance": 0.0,
+            "total_received": 0.0,
+            "total_sent": 0.0,
+            "tx_count": 0
+        }), 500
+
+@app.route('/transaction/<txid>')
+def get_transaction(txid):
+    """Get transaction details"""
+    try:
+        tx_info = bitcoin_api.get_transaction(txid)
+        if tx_info:
+            return jsonify(tx_info)
+        return jsonify({"error": "Transaction not found"}), 404
+    except Exception as e:
+        logger.error(f"Error getting transaction: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/decode_transaction', methods=['POST'])
+def decode_transaction():
+    """Decode a raw transaction"""
+    try:
+        tx_hex = request.json.get('tx_hex')
+        if not tx_hex:
+            return jsonify({"error": "No transaction hex provided"}), 400
+            
+        decoded = bitcoin_api.decode_transaction(tx_hex)
+        if decoded:
+            return jsonify(decoded)
+        return jsonify({"error": "Failed to decode transaction"}), 400
+    except Exception as e:
+        logger.error(f"Error decoding transaction: {e}")
+        return jsonify({"error": str(e)}), 500
 
 # Routes for CornyCHAT API
 @app.route("/roomlist/")

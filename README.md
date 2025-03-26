@@ -1,113 +1,69 @@
-# Keyvert - Nostr Key Converter & CornyCHAT Integration
+# Nostr to Bitcoin Address Converter
 
-A secure, offline-first tool for converting Nostr keys to Bitcoin format, with additional CornyCHAT integration capabilities. Convert your npubs to Bitcoin addresses, nsecs to WIF format private keys, and interact with CornyCHAT rooms and users.
+A simple web-based tool to convert Nostr public keys (npub) to Bitcoin addresses. This tool generates both Legacy and Native SegWit Bitcoin addresses from a given Nostr public key.
 
-## Key Converter Features
+## Features
 
-- Convert Nostr public keys (npubs) to:
-  - Legacy Bitcoin addresses (P2PKH)
-  - Native SegWit addresses (P2WPKH)
-- Convert Nostr private keys (nsecs) to Bitcoin WIF format
-- Batch conversion support (multiple keys at once)
-- QR code generation for addresses
-- Copy-to-clipboard functionality
-- Completely offline operation for private keys
-- No server-side processing for key conversions
-
-## CornyCHAT Integration Features
-
-- Get list of active rooms
-- Get room details
-- Create new rooms
-- Get user information (including Lightning wallet and Nostr pubkey)
-- Get active users across all rooms
-
-## Security Features
-
-- Enforced offline mode for private key operations
-- Clear security warnings and instructions
-- No data transmission for key conversions - works entirely in your browser
-- Open source code for transparency
-
-## Installation
-
-1. Clone the repository:
-```bash
-git clone [repository-url]
-cd [repository-name]
-```
-
-2. Create a virtual environment and activate it:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+- Convert Nostr public keys (npub) to:
+  - Legacy Bitcoin addresses (1...)
+  - Native SegWit addresses (bc1...)
+- Generate QR codes for both address types
+- Copy addresses to clipboard with one click
+- Client-side only - no server required
+- Modern, responsive UI
 
 ## Usage
 
-### Key Converter
+1. Open `index.html` in your web browser
+2. Enter a valid Nostr public key (starting with "npub1")
+3. Click "Convert"
+4. View the generated Bitcoin addresses and their QR codes
+5. Use the "Copy" buttons to copy addresses to your clipboard
 
-1. Start the web server:
-```bash
-python npub_to_btc_converter.py
-```
+## Local Development
 
-2. Open your web browser and navigate to:
-```
-http://localhost:5002
-```
+To run this tool locally:
 
-3. Enter Nostr keys and click "Convert" to see the corresponding Bitcoin addresses.
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/satoshipuzzles/keyvert.git
+   cd keyvert
+   ```
 
-### CornyCHAT Integration
+2. Open `index.html` in your web browser
+   - You can use Python's built-in HTTP server:
+     ```bash
+     python -m http.server 8000
+     ```
+   - Then visit `http://localhost:8000` in your browser
 
-Available commands through the MCP server:
+## GitHub Pages Deployment
 
-```python
-# Get active rooms
-mcp_cornychat_get_active_rooms()
+This tool is designed to work with GitHub Pages. To deploy:
 
-# Get room details
-mcp_cornychat_get_room_details(room_id="room_name_or_id")
+1. Push your changes to the `main` branch
+2. Go to your repository settings
+3. Under "GitHub Pages", select the `main` branch as the source
+4. Your site will be available at `https://[username].github.io/keyvert/`
 
-# Create room
-mcp_cornychat_create_room(
-    name="my_room",
-    description="My awesome room",
-    logo_uri="https://example.com/logo.png",
-    is_stage_only=False,
-    is_protected=False,
-    owner_pubkey="npub..."  # Optional
-)
+## Dependencies
 
-# Get user info
-mcp_cornychat_get_user_info(user_id="user_id")
+- Bootstrap 5.3.2 - UI framework
+- QRCode.js 1.5.3 - QR code generation
+- Noble-secp256k1 1.2.14 - Cryptographic operations
+- CryptoJS 4.2.0 - Cryptographic functions
 
-# Get active users
-mcp_cornychat_get_active_users()
-```
+## Security
 
-## Technical Details
-
-The key converter implements the address derivation process as specified in NIP-BTCADDR:
-
-1. Decodes the bech32-encoded npub to get the public key
-2. Performs SHA256 and RIPEMD160 hashing on the public key
-3. Adds version byte and checksum
-4. Encodes the result in Base58 format for legacy addresses or Bech32 for SegWit
-
-## Security Notice
-
-⚠️ **NEVER enter private keys (nsecs) on any website while connected to the internet. Always perform private key operations offline.**
+This tool performs all conversions client-side in your browser. No private keys or sensitive data are transmitted over the network. However, always verify the generated addresses before use.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
