@@ -9,6 +9,7 @@
     <script src="https://bundle.run/bech32@2.0.0"></script>
     <script src="https://bundle.run/bs58@5.0.0"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/hash.js/1.1.7/hash.min.js"></script>
 </head>
 <body class="bg-gray-100 min-h-screen">
     <div class="container mx-auto px-4 py-8">
@@ -41,6 +42,7 @@
             <button onclick="convertKeys()" class="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 Convert
             </button>
+            <div id="error" class="mt-4 text-red-600 hidden"></div>
         </div>
 
         <!-- Results Area -->
@@ -102,13 +104,17 @@
         }
 
         function bytesToHex(bytes) {
-            return bytes.reduce((str, byte) => str + byte.toString(16).padStart(2, '0'), '');
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
         }
 
-        async function sha256(message) {
-            const msgBuffer = new TextEncoder().encode(message);
-            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        async function sha256(data) {
+            const buffer = data instanceof Uint8Array ? data : new TextEncoder().encode(data);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
             return new Uint8Array(hashBuffer);
+        }
+
+        function ripemd160(data) {
+            return new Uint8Array(hash.ripemd160().update(data).digest());
         }
 
         async function convertPublicKey(npub) {
@@ -120,18 +126,24 @@
                 }
 
                 // Convert words to bytes
-                const pubkeyBytes = bech32.fromWords(decoded.words);
-                const pubkeyHex = bytesToHex(pubkeyBytes);
-
+                const pubkeyBytes = new Uint8Array(bech32.fromWords(decoded.words));
+                
                 // Generate Legacy address (P2PKH)
-                const pubkeyHash = await sha256(hexToBytes(pubkeyHex));
-                const ripemd160 = new Uint8Array(20); // Placeholder for RIPEMD160
+                const sha256Hash = await sha256(pubkeyBytes);
+                const ripemd160Hash = ripemd160(sha256Hash);
                 const version = new Uint8Array([0x00]); // Mainnet P2PKH
-                const legacyAddr = bs58.encode(Buffer.concat([version, ripemd160]));
+                const withVersion = new Uint8Array(21);
+                withVersion.set(version);
+                withVersion.set(ripemd160Hash, 1);
+                const checksum = await sha256(await sha256(withVersion));
+                const binary = new Uint8Array(25);
+                binary.set(withVersion);
+                binary.set(new Uint8Array(checksum.buffer.slice(0, 4)), 21);
+                const legacyAddr = bs58.encode(binary);
 
                 // Generate Native SegWit address (P2WPKH)
-                const words = bech32.toWords(ripemd160);
-                const nativeSegwitAddr = bech32.encode('bc', 1, words);
+                const words = bech32.toWords(ripemd160Hash);
+                const nativeSegwitAddr = bech32.encode('bc', 0, words);
 
                 return {
                     legacy: legacyAddr,
@@ -148,50 +160,52 @@
             const resultDiv = document.getElementById('results');
             const errorDiv = document.getElementById('error');
             
-            try {
-                errorDiv.textContent = '';
-                resultDiv.innerHTML = '';
-                
-                const keys = input.split(/[\n,]+/).map(k => k.trim()).filter(k => k);
-                
-                for (const key of keys) {
-                    try {
-                        const template = document.getElementById('public-result-template').content.cloneNode(true);
-                        template.querySelector('p').textContent = key;
-                        
-                        const addresses = await convertPublicKey(key);
-                        
-                        // Set Legacy address
-                        const legacyElem = template.querySelector('input');
-                        legacyElem.value = addresses.legacy;
-                        
-                        // Set Native SegWit address
-                        const segwitElem = template.querySelector('input');
-                        segwitElem.value = addresses.nativeSegwit;
-                        
-                        // Generate QR codes
-                        const qrLegacy = qrcode(0, 'L');
-                        qrLegacy.addData(addresses.legacy);
-                        qrLegacy.make();
-                        template.querySelector('.qr-code').innerHTML = qrLegacy.createImgTag(4);
-                        
-                        const qrSegwit = qrcode(0, 'L');
-                        qrSegwit.addData(addresses.nativeSegwit);
-                        qrSegwit.make();
-                        template.querySelector('.qr-code').innerHTML = qrSegwit.createImgTag(4);
-                        
-                        resultDiv.appendChild(template);
-                    } catch (error) {
-                        console.error('Error processing key:', key, error);
-                        const errorTemplate = document.getElementById('private-result-template').content.cloneNode(true);
-                        errorTemplate.querySelector('p').textContent = key;
-                        errorTemplate.querySelector('input').value = 'Error: Invalid key';
-                        resultDiv.appendChild(errorTemplate);
-                    }
+            errorDiv.classList.add('hidden');
+            resultDiv.innerHTML = '';
+            
+            if (!input) {
+                errorDiv.textContent = 'Please enter at least one key';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            const keys = input.split(/[\n,]+/).map(k => k.trim()).filter(k => k);
+            
+            for (const key of keys) {
+                try {
+                    const template = document.getElementById('public-result-template').content.cloneNode(true);
+                    const inputs = template.querySelectorAll('input');
+                    template.querySelector('p').textContent = key;
+                    
+                    const addresses = await convertPublicKey(key);
+                    
+                    // Set Legacy address
+                    inputs[0].value = addresses.legacy;
+                    
+                    // Set Native SegWit address
+                    inputs[1].value = addresses.nativeSegwit;
+                    
+                    // Generate QR codes
+                    const qrCodes = template.querySelectorAll('.qr-code');
+                    
+                    // Legacy QR
+                    const qrLegacy = qrcode(0, 'L');
+                    qrLegacy.addData(addresses.legacy);
+                    qrLegacy.make();
+                    qrCodes[0].innerHTML = qrLegacy.createImgTag(4);
+                    
+                    // SegWit QR
+                    const qrSegwit = qrcode(0, 'L');
+                    qrSegwit.addData(addresses.nativeSegwit);
+                    qrSegwit.make();
+                    qrCodes[1].innerHTML = qrSegwit.createImgTag(4);
+                    
+                    resultDiv.appendChild(template);
+                } catch (error) {
+                    console.error('Error processing key:', key, error);
+                    errorDiv.textContent = `Error processing key "${key}": ${error.message}`;
+                    errorDiv.classList.remove('hidden');
                 }
-            } catch (error) {
-                console.error('Error:', error);
-                errorDiv.textContent = `Error: ${error.message}`;
             }
         }
 
