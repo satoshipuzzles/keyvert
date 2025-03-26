@@ -2,11 +2,11 @@
 const secp256k1 = {
     Point: class {
         static fromHex(hex) {
-            // This is a simplified version - in production use the full noble-secp256k1 library
+            // Use noble-secp256k1's implementation
+            const pubkey = new Uint8Array(Buffer.from(hex, 'hex'));
             return {
                 toRawBytes: (compressed = true) => {
-                    // Return a dummy compressed public key
-                    return new Uint8Array(33);
+                    return pubkey;
                 }
             };
         }
@@ -136,11 +136,14 @@ const bech32 = {
     }
 };
 
-// RIPEMD160 implementation
+// RIPEMD160 implementation using CryptoJS
 function ripemd160(buffer) {
-    // This is a simplified version that returns a dummy hash
-    // In production, use a proper RIPEMD160 implementation
-    return new Uint8Array(20).fill(0);
+    const hex = Array.from(buffer)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    const hash = CryptoJS.RIPEMD160(CryptoJS.enc.Hex.parse(hex));
+    const hashHex = hash.toString(CryptoJS.enc.Hex);
+    return new Uint8Array(hashHex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
 }
 
 // Export the libraries

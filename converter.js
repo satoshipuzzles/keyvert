@@ -94,11 +94,9 @@ async function pubkeyToLegacyAddress(pubkeyHex) {
         const versionedHash = new Uint8Array([0x00, ...ripemd160Hash]);
         
         // Perform double SHA-256 for checksum
-        const checksum = new Uint8Array(
-            await crypto.subtle.digest('SHA-256',
-                await crypto.subtle.digest('SHA-256', versionedHash)
-            )
-        ).slice(0, 4);
+        const firstSHA = await crypto.subtle.digest('SHA-256', versionedHash);
+        const secondSHA = await crypto.subtle.digest('SHA-256', firstSHA);
+        const checksum = new Uint8Array(secondSHA).slice(0, 4);
         
         // Combine versioned hash and checksum
         const binaryAddr = new Uint8Array([...versionedHash, ...checksum]);
@@ -106,6 +104,7 @@ async function pubkeyToLegacyAddress(pubkeyHex) {
         // Encode in base58
         return base58Encode(binaryAddr);
     } catch (error) {
+        console.error('Legacy address error:', error);
         throw new Error('Failed to generate legacy address');
     }
 }
@@ -125,6 +124,7 @@ async function pubkeyToSegwitAddress(pubkeyHex) {
         const words = bech32.toWords(ripemd160Hash);
         return bech32.encode('bc', [0, ...words]);
     } catch (error) {
+        console.error('SegWit address error:', error);
         throw new Error('Failed to generate SegWit address');
     }
 }
