@@ -3,19 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KeyVert - Nostr Key Converter</title>
+    <title>KeyVert Pro - Nostr & Bitcoin Balance Tracker</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://mempool.space/api/v1/ws"></script>
     <style>
         :root {
-            --bg-primary: #1a1b26;
-            --bg-secondary: #24283b;
-            --text-primary: #a9b1d6;
-            --text-secondary: #7aa2f7;
-            --accent: #bb9af7;
-            --success: #9ece6a;
-            --error: #f7768e;
-            --card-bg: #1f2335;
+            /* Light theme */
+            --light-bg-primary: #ffffff;
+            --light-bg-secondary: #f5f5f5;
+            --light-text-primary: #2d3748;
+            --light-text-secondary: #4a5568;
+            --light-accent: #3182ce;
+            --light-success: #48bb78;
+            --light-error: #e53e3e;
+            --light-card-bg: #ffffff;
+            
+            /* Dark theme */
+            --dark-bg-primary: #1a1b26;
+            --dark-bg-secondary: #24283b;
+            --dark-text-primary: #a9b1d6;
+            --dark-text-secondary: #7aa2f7;
+            --dark-accent: #bb9af7;
+            --dark-success: #9ece6a;
+            --dark-error: #f7768e;
+            --dark-card-bg: #1f2335;
+            
+            /* Default to dark theme */
+            --bg-primary: var(--dark-bg-primary);
+            --bg-secondary: var(--dark-bg-secondary);
+            --text-primary: var(--dark-text-primary);
+            --text-secondary: var(--dark-text-secondary);
+            --accent: var(--dark-accent);
+            --success: var(--dark-success);
+            --error: var(--dark-error);
+            --card-bg: var(--dark-card-bg);
+        }
+
+        [data-theme="light"] {
+            --bg-primary: var(--light-bg-primary);
+            --bg-secondary: var(--light-bg-secondary);
+            --text-primary: var(--light-text-primary);
+            --text-secondary: var(--light-text-secondary);
+            --accent: var(--light-accent);
+            --success: var(--light-success);
+            --error: var(--light-error);
+            --card-bg: var(--light-card-bg);
         }
 
         * {
@@ -30,6 +63,7 @@
             color: var(--text-primary);
             min-height: 100vh;
             padding: 2rem;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         .container {
@@ -51,6 +85,28 @@
             border-radius: 1rem;
             padding: 1.5rem;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: background-color 0.3s;
+        }
+
+        .leaderboard {
+            grid-column: 1 / -1;
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            background: var(--accent);
+            border: none;
+            border-radius: 50%;
+            width: 3rem;
+            height: 3rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            transition: background-color 0.3s;
         }
 
         h1, h2 {
@@ -67,6 +123,7 @@
             background-color: var(--bg-secondary);
             color: var(--text-primary);
             font-size: 1rem;
+            transition: background-color 0.3s, color 0.3s;
         }
 
         button {
@@ -77,7 +134,7 @@
             border-radius: 0.5rem;
             cursor: pointer;
             font-weight: 600;
-            transition: opacity 0.2s;
+            transition: opacity 0.2s, background-color 0.3s;
         }
 
         button:hover {
@@ -95,6 +152,7 @@
             padding: 1rem;
             background-color: var(--bg-secondary);
             border-radius: 0.5rem;
+            transition: background-color 0.3s;
         }
 
         .address-container {
@@ -110,7 +168,7 @@
 
         .qr-container {
             display: grid;
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
             gap: 1rem;
             margin-top: 1rem;
         }
@@ -127,59 +185,135 @@
             margin-bottom: 1rem;
         }
 
-        .github-link {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            color: var(--text-secondary);
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.9rem;
+        .leaderboard-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
         }
 
-        .github-link:hover {
-            color: var(--accent);
+        .leaderboard-table th,
+        .leaderboard-table td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid var(--bg-secondary);
+        }
+
+        .leaderboard-table th {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        .balance {
+            font-family: monospace;
+            color: var(--success);
+        }
+
+        .loading {
+            display: inline-block;
+            width: 1.5rem;
+            height: 1.5rem;
+            border: 3px solid var(--bg-secondary);
+            border-radius: 50%;
+            border-top-color: var(--accent);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
+    <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle theme">
+        🌙
+    </button>
+
     <div class="container">
         <div class="card">
-            <h1>KeyVert - Nostr Key Converter</h1>
-            <input type="text" id="nostrKey" placeholder="Enter npub or nsec key" onkeypress="if(event.key === 'Enter') convertKey()">
-            <button onclick="convertKey()">Convert</button>
+            <h1>KeyVert Pro - Bitcoin Address Converter</h1>
+            <input type="text" id="nostrKey" placeholder="Enter your npub key" onkeypress="if(event.key === 'Enter') convertKey()">
+            <button onclick="convertKey()">Convert & Track Balance</button>
             <div id="error" class="error"></div>
             <div id="results" style="display: none;">
                 <div class="result-container">
-                    <h2>Legacy Address</h2>
+                    <h2>Legacy Address (P2PKH)</h2>
                     <div class="address-container">
                         <span id="legacyAddress" class="address-text"></span>
                         <button class="copy-btn" onclick="copyToClipboard('legacyAddress')">Copy</button>
                     </div>
                     <div id="legacyQR" class="qr-code"></div>
+                    <div class="balance" id="legacyBalance">Balance: 0.00000000 BTC</div>
                 </div>
                 <div class="result-container">
-                    <h2>SegWit Address</h2>
+                    <h2>SegWit Address (P2WPKH)</h2>
                     <div class="address-container">
                         <span id="segwitAddress" class="address-text"></span>
                         <button class="copy-btn" onclick="copyToClipboard('segwitAddress')">Copy</button>
                     </div>
                     <div id="segwitQR" class="qr-code"></div>
+                    <div class="balance" id="segwitBalance">Balance: 0.00000000 BTC</div>
                 </div>
+                <div class="result-container">
+                    <h2>Taproot Address (P2TR)</h2>
+                    <div class="address-container">
+                        <span id="taprootAddress" class="address-text"></span>
+                        <button class="copy-btn" onclick="copyToClipboard('taprootAddress')">Copy</button>
+                    </div>
+                    <div id="taprootQR" class="qr-code"></div>
+                    <div class="balance" id="taprootBalance">Balance: 0.00000000 BTC</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card leaderboard">
+            <h2>CornyChat Bitcoin Leaderboard</h2>
+            <div id="leaderboardContent">
+                <table class="leaderboard-table">
+                    <thead>
+                        <tr>
+                            <th>Rank</th>
+                            <th>Nostr Key</th>
+                            <th>Total Balance</th>
+                            <th>Last Updated</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <tr>
+                            <td colspan="4" style="text-align: center;">
+                                <div class="loading"></div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <a href="https://github.com/satoshipuzzles/keyvert" class="github-link" target="_blank">
-        View on GitHub
-        <svg height="24" width="24" viewBox="0 0 16 16" version="1.1" fill="currentColor">
-            <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
-        </svg>
-    </a>
-
     <script>
+        // Theme toggle functionality
+        function toggleTheme() {
+            const body = document.body;
+            const themeToggle = document.querySelector('.theme-toggle');
+            const currentTheme = body.getAttribute('data-theme');
+            
+            if (currentTheme === 'light') {
+                body.removeAttribute('data-theme');
+                themeToggle.innerHTML = '🌙';
+                localStorage.setItem('theme', 'dark');
+            } else {
+                body.setAttribute('data-theme', 'light');
+                themeToggle.innerHTML = '☀️';
+                localStorage.setItem('theme', 'light');
+            }
+        }
+
+        // Initialize theme from localStorage
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+            document.body.setAttribute('data-theme', 'light');
+            document.querySelector('.theme-toggle').innerHTML = '☀️';
+        }
+
         // Bech32 implementation
         const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
         const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
@@ -406,7 +540,98 @@
             return 'bc1' + [...grouped, ...checksum].map(i => CHARSET[i]).join('');
         }
 
-        function convertKey() {
+        // Mempool.space API endpoints
+        const MEMPOOL_API = 'https://mempool.space/api';
+        const WEBSOCKET_URL = 'wss://mempool.space/api/v1/ws';
+        let ws;
+
+        // Store for tracking balances
+        const balanceStore = {
+            addresses: new Map(),
+            leaderboard: new Map()
+        };
+
+        // Initialize WebSocket connection
+        function initWebSocket() {
+            ws = new WebSocket(WEBSOCKET_URL);
+            
+            ws.onopen = () => {
+                console.log('Connected to mempool.space websocket');
+                // Subscribe to address updates for tracked addresses
+                balanceStore.addresses.forEach((_, address) => {
+                    ws.send(JSON.stringify({
+                        action: 'want',
+                        data: ['address:' + address]
+                    }));
+                });
+            };
+            
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.address) {
+                    updateBalance(data.address, data.balance);
+                }
+            };
+            
+            ws.onclose = () => {
+                console.log('WebSocket connection closed. Reconnecting...');
+                setTimeout(initWebSocket, 5000);
+            };
+        }
+
+        // Initialize WebSocket on page load
+        initWebSocket();
+
+        // Function to fetch initial balance for an address
+        async function fetchAddressBalance(address) {
+            try {
+                const response = await fetch(`${MEMPOOL_API}/address/${address}`);
+                const data = await response.json();
+                return data.chain_stats.funded_txo_sum - data.chain_stats.spent_txo_sum;
+            } catch (error) {
+                console.error('Error fetching balance:', error);
+                return 0;
+            }
+        }
+
+        // Update balance in UI
+        function updateBalance(address, balance) {
+            const satsToBTC = balance / 100000000;
+            balanceStore.addresses.set(address, satsToBTC);
+            
+            ['legacy', 'segwit', 'taproot'].forEach(type => {
+                const balanceElement = document.getElementById(`${type}Balance`);
+                if (balanceElement && balanceElement.dataset.address === address) {
+                    balanceElement.textContent = `Balance: ${satsToBTC.toFixed(8)} BTC`;
+                }
+            });
+            
+            updateLeaderboard();
+        }
+
+        // Update leaderboard
+        function updateLeaderboard() {
+            const leaderboardData = Array.from(balanceStore.leaderboard.entries())
+                .map(([npub, addresses]) => {
+                    const total = addresses.reduce((sum, addr) => 
+                        sum + (balanceStore.addresses.get(addr) || 0), 0);
+                    return { npub, total };
+                })
+                .sort((a, b) => b.total - a.total);
+
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = leaderboardData.map((entry, index) => `
+                <tr>
+                    <td>${index + 1}</td>
+                    <td>${entry.npub.slice(0, 8)}...${entry.npub.slice(-4)}</td>
+                    <td class="balance">${entry.total.toFixed(8)} BTC</td>
+                    <td>${new Date().toLocaleTimeString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Enhanced key conversion with Taproot support
+        async function convertKey() {
             const input = document.getElementById('nostrKey').value.trim();
             const errorDiv = document.getElementById('error');
             const resultsDiv = document.getElementById('results');
@@ -418,25 +643,38 @@
                 // Generate addresses
                 const legacyAddress = pubkeyToLegacyAddress(pubkeyHex);
                 const segwitAddress = pubkeyToSegwitAddress(pubkeyHex);
+                const taprootAddress = await pubkeyToTaprootAddress(pubkeyHex);
+                
+                // Store addresses for leaderboard
+                balanceStore.leaderboard.set(input, [legacyAddress, segwitAddress, taprootAddress]);
                 
                 // Update UI
                 document.getElementById('legacyAddress').textContent = legacyAddress;
                 document.getElementById('segwitAddress').textContent = segwitAddress;
+                document.getElementById('taprootAddress').textContent = taprootAddress;
+                
+                // Set address data attributes for balance updates
+                document.getElementById('legacyBalance').dataset.address = legacyAddress;
+                document.getElementById('segwitBalance').dataset.address = segwitAddress;
+                document.getElementById('taprootBalance').dataset.address = taprootAddress;
                 
                 // Generate QR codes
-                document.getElementById('legacyQR').innerHTML = '';
-                document.getElementById('segwitQR').innerHTML = '';
+                generateQR('legacyQR', legacyAddress);
+                generateQR('segwitQR', segwitAddress);
+                generateQR('taprootQR', taprootAddress);
                 
-                new QRCode(document.getElementById('legacyQR'), {
-                    text: legacyAddress,
-                    width: 128,
-                    height: 128
-                });
-                
-                new QRCode(document.getElementById('segwitQR'), {
-                    text: segwitAddress,
-                    width: 128,
-                    height: 128
+                // Fetch initial balances
+                [legacyAddress, segwitAddress, taprootAddress].forEach(async (address) => {
+                    const balance = await fetchAddressBalance(address);
+                    updateBalance(address, balance);
+                    
+                    // Subscribe to address updates
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            action: 'want',
+                            data: ['address:' + address]
+                        }));
+                    }
                 });
                 
                 // Show results
@@ -449,6 +687,83 @@
             }
         }
 
+        // Generate QR code
+        function generateQR(elementId, text) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = '';
+            new QRCode(element, {
+                text: text,
+                width: 128,
+                height: 128
+            });
+        }
+
+        // Taproot address generation
+        async function pubkeyToTaprootAddress(pubkeyHex) {
+            // Convert hex pubkey to bytes
+            const pubkeyBytes = hexToBytes(pubkeyHex);
+            
+            // Tagged hash prefix for BIP340/341
+            const taggedHash = await crypto.subtle.digest('SHA-256', 
+                new TextEncoder().encode('TapTweak'));
+            
+            // Tweak the public key
+            const tweakedPubkey = await tweakPublicKey(pubkeyBytes, taggedHash);
+            
+            // Convert to 5-bit words for Bech32m
+            const program = Array.from(tweakedPubkey);
+            const words = convertBits(program, 8, 5, true);
+            
+            // Create checksum using Bech32m
+            const checksum = createChecksum('bc', words, 1);
+            
+            // Combine everything
+            return 'bc1p' + [...words, ...checksum].map(i => CHARSET[i]).join('');
+        }
+
+        // Helper function for Taproot public key tweaking
+        async function tweakPublicKey(pubkey, taggedHash) {
+            const tweakHash = await crypto.subtle.digest('SHA-256', 
+                new Uint8Array([...taggedHash, ...pubkey]));
+            
+            const tweaked = new Uint8Array(33);
+            tweaked[0] = 0x02 | (pubkey[32] & 1);
+            tweaked.set(new Uint8Array(tweakHash).slice(1), 1);
+            
+            return tweaked;
+        }
+
+        // Helper function to convert between bit lengths
+        function convertBits(data, fromBits, toBits, pad) {
+            let acc = 0;
+            let bits = 0;
+            const ret = [];
+            const maxv = (1 << toBits) - 1;
+            
+            for (const value of data) {
+                if (value < 0 || (value >> fromBits) !== 0) {
+                    throw new Error('Invalid value');
+                }
+                acc = (acc << fromBits) | value;
+                bits += fromBits;
+                while (bits >= toBits) {
+                    bits -= toBits;
+                    ret.push((acc >> bits) & maxv);
+                }
+            }
+            
+            if (pad) {
+                if (bits > 0) {
+                    ret.push((acc << (toBits - bits)) & maxv);
+                }
+            } else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv)) {
+                throw new Error('Invalid padding');
+            }
+            
+            return ret;
+        }
+
+        // Copy to clipboard with feedback
         async function copyToClipboard(elementId) {
             const text = document.getElementById(elementId).textContent;
             try {
