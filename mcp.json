@@ -1,0 +1,77 @@
+{
+    "name": "cornychat",
+    "version": "1.0.0",
+    "description": "CornyCHAT API integration for Cursor",
+    "author": "puzzles",
+    "commands": [
+        {
+            "name": "mcp_cornychat_get_active_rooms",
+            "description": "Get a list of all active CornyCHAT rooms",
+            "parameters": {}
+        },
+        {
+            "name": "mcp_cornychat_get_room_details",
+            "description": "Get detailed information about a specific room",
+            "parameters": {
+                "room_id": {
+                    "type": "string",
+                    "description": "The room ID or name to get details for"
+                }
+            }
+        },
+        {
+            "name": "mcp_cornychat_create_room",
+            "description": "Create a new CornyCHAT room",
+            "parameters": {
+                "name": {
+                    "type": "string",
+                    "description": "Name for the new room"
+                },
+                "description": {
+                    "type": "string",
+                    "description": "Room description",
+                    "optional": true,
+                    "default": ""
+                },
+                "logo_uri": {
+                    "type": "string",
+                    "description": "URL for the room logo",
+                    "optional": true,
+                    "default": ""
+                },
+                "is_stage_only": {
+                    "type": "boolean",
+                    "description": "Whether the room is stage-only",
+                    "optional": true,
+                    "default": false
+                },
+                "is_protected": {
+                    "type": "boolean",
+                    "description": "Whether the room is protected",
+                    "optional": true,
+                    "default": false
+                },
+                "owner_pubkey": {
+                    "type": "string",
+                    "description": "Nostr public key of the room owner",
+                    "optional": true
+                }
+            }
+        },
+        {
+            "name": "mcp_cornychat_get_user_info",
+            "description": "Get information about a specific user including their lightning wallet and npub",
+            "parameters": {
+                "user_id": {
+                    "type": "string",
+                    "description": "The user ID to get information for"
+                }
+            }
+        },
+        {
+            "name": "mcp_cornychat_get_active_users",
+            "description": "Get a list of all active users across all rooms",
+            "parameters": {}
+        }
+    ]
+} 
