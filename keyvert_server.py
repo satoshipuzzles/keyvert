@@ -255,18 +255,23 @@ def get_address_balance(address: str) -> Dict:
         response.raise_for_status()
         data = response.json()
         
-        # Convert satoshis to BTC
-        balance_btc = data.get("chain_stats", {}).get("funded_txo_sum", 0) / 100000000
-        unspent_btc = data.get("chain_stats", {}).get("spent_txo_sum", 0) / 100000000
+        # Get chain stats
+        chain_stats = data.get("chain_stats", {})
+        funded_sats = chain_stats.get("funded_txo_sum", 0)
+        spent_sats = chain_stats.get("spent_txo_sum", 0)
+        
+        # Calculate actual balance (funded - spent) in BTC
+        balance_btc = (funded_sats - spent_sats) / 100000000
         
         return {
             "balance": balance_btc,
-            "unspent": unspent_btc,
-            "tx_count": data.get("chain_stats", {}).get("tx_count", 0)
+            "funded": funded_sats / 100000000,
+            "spent": spent_sats / 100000000,
+            "tx_count": chain_stats.get("tx_count", 0)
         }
     except Exception as e:
-        logger.error(f"Error fetching balance: {str(e)}")
-        return {"error": "Failed to fetch balance"}
+        logger.error(f"Error fetching balance for {address}: {str(e)}")
+        return {"error": f"Failed to fetch balance: {str(e)}"}
 
 # Initialize CornyCHAT API
 corny_api = CornyChatAPI()
@@ -371,5 +376,68 @@ def authenticate():
         logger.error(f"Authentication error: {str(e)}")
         return jsonify({"error": "Internal server error"}), 500
 
+@app.route("/leaderboard")
+def get_leaderboard():
+    """Get all active users sorted by their Bitcoin balance."""
+    try:
+        # Get all active rooms and their users
+        rooms = corny_api.get_active_rooms()
+        users = {}
+        
+        # Collect unique users from all rooms
+        for room in rooms:
+            for user in room.get("userInfo", []):
+                if user.get("npub") and user.get("npub") not in users:
+                    users[user["npub"]] = {
+                        "name": user.get("name", "Anonymous"),
+                        "avatar": user.get("avatar", "/img/avatars/avatar-corn-1.png"),
+                        "npub": user["npub"]
+                    }
+        
+        # Calculate balances for each user
+        leaderboard = []
+        for npub, user_data in users.items():
+            try:
+                # Convert npub to addresses
+                hex_pubkey = npub_to_hex(npub)
+                legacy_address = hex_to_legacy_address(hex_pubkey)
+                segwit_address = hex_to_segwit_address(hex_pubkey)
+                
+                # Get balances
+                legacy_balance = get_address_balance(legacy_address)
+                segwit_balance = get_address_balance(segwit_address)
+                
+                if "error" not in legacy_balance and "error" not in segwit_balance:
+                    # Sum up total balance
+                    total_balance = (
+                        legacy_balance.get("balance", 0) +
+                        segwit_balance.get("balance", 0)
+                    )
+                    
+                    leaderboard.append({
+                        **user_data,
+                        "total_balance": total_balance,
+                        "legacy_address": legacy_address,
+                        "segwit_address": segwit_address,
+                        "tx_count": (
+                            legacy_balance.get("tx_count", 0) +
+                            segwit_balance.get("tx_count", 0)
+                        )
+                    })
+            except Exception as e:
+                logger.error(f"Error processing user {npub}: {str(e)}")
+                continue
+        
+        # Sort by balance
+        leaderboard.sort(key=lambda x: x["total_balance"], reverse=True)
+        
+        return jsonify({
+            "leaderboard": leaderboard,
+            "total_users": len(leaderboard)
+        })
+    except Exception as e:
+        logger.error(f"Error generating leaderboard: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5003, debug=True) 
+    app.run(host='0.0.0.0', port=5005, debug=True) 
