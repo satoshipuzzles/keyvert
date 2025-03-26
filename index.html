@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nostr Key Converter (Offline)</title>
+    <title>Keyvert - Nostr Key Converter & CornyChatters</title>
+    
     <!-- Preload critical resources -->
     <link rel="preload" href="https://cdn.tailwindcss.com/3.4.1" as="script">
     <link rel="preload" href="https://bundle.run/noble-secp256k1@1.2.14" as="script">
@@ -14,6 +15,7 @@
     <script src="https://bundle.run/noble-secp256k1@1.2.14"></script>
     <script src="https://bundle.run/bech32@2.0.0"></script>
     <script src="https://bundle.run/bs58@5.0.0"></script>
+    
     <script>
     tailwind.config = {
         darkMode: 'class',
@@ -50,7 +52,7 @@
     </div>
 
     <div class="container mx-auto px-4 py-8">
-        <h1 class="text-3xl font-bold mb-4 text-center">Nostr Key Converter</h1>
+        <h1 class="text-3xl font-bold mb-4 text-center">Keyvert</h1>
         
         <!-- Download Banner -->
         <div class="bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 p-4 mb-4" role="alert">
@@ -71,24 +73,40 @@
         <div class="mb-8">
             <div class="border-b border-gray-200">
                 <nav class="-mb-px flex" aria-label="Tabs">
-                    <button onclick="switchTab('public')" class="tab-btn active w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="public">
-                        Public Keys (npub)
+                    <button onclick="switchTab('public')" class="tab-btn active w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="public">
+                        Public Keys
                     </button>
-                    <button onclick="switchTab('private')" class="tab-btn w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="private">
-                        Private Keys (nsec)
+                    <button onclick="switchTab('private')" class="tab-btn w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="private">
+                        Private Keys
+                    </button>
+                    <button onclick="switchTab('cornychat')" class="tab-btn w-1/3 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="cornychat">
+                        CornyChatters
                     </button>
                 </nav>
             </div>
         </div>
 
-        <!-- Input Area -->
-        <div class="mb-8">
+        <!-- Input Area (for public/private keys) -->
+        <div id="key-input-area" class="mb-8">
             <textarea id="input" rows="4" class="w-full p-4 border rounded-lg shadow-sm dark:bg-dark-card dark:border-gray-700" 
                       placeholder="Enter Nostr keys (one per line)"></textarea>
             <button onclick="convertKeys()" class="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 Convert
             </button>
             <div id="error" class="mt-4 text-red-600 dark:text-red-400 hidden"></div>
+        </div>
+
+        <!-- CornyChatters Area -->
+        <div id="cornychat-area" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Active CornyChatters</h2>
+                <button onclick="fetchCornyChatters()" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                    Refresh
+                </button>
+            </div>
+            <div id="cornychatters" class="grid grid-cols-1 gap-4">
+                <!-- CornyChatters will be loaded here -->
+            </div>
         </div>
 
         <!-- Results Area -->
@@ -135,6 +153,21 @@
                         <button onclick="copyToClipboard(this)" class="ml-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
                             Copy
                         </button>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <template id="cornychatter-template">
+            <div class="bg-white dark:bg-dark-card rounded-lg shadow-md p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="font-medium text-gray-900 dark:text-gray-100"></h3>
+                        <p class="text-sm text-gray-500 dark:text-gray-400 break-all"></p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-mono text-sm text-gray-900 dark:text-gray-100"></p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">BTC Balance</p>
                     </div>
                 </div>
             </div>
@@ -275,6 +308,54 @@
             });
         }
 
+        // CornyChatters functions
+        async function fetchCornyChatters() {
+            const cornychattersDiv = document.getElementById('cornychatters');
+            cornychattersDiv.innerHTML = '<p class="text-center">Loading...</p>';
+
+            try {
+                // Fetch active users from CornyChatters API
+                const response = await fetch('http://127.0.0.1:5001/users/active');
+                const users = await response.json();
+
+                cornychattersDiv.innerHTML = '';
+
+                if (users.length === 0) {
+                    cornychattersDiv.innerHTML = '<p class="text-center text-gray-500">No active users found</p>';
+                    return;
+                }
+
+                for (const user of users) {
+                    const template = document.getElementById('cornychatter-template').content.cloneNode(true);
+                    
+                    // Set user info
+                    template.querySelector('h3').textContent = user.name || 'Anonymous';
+                    template.querySelector('p').textContent = user.npub || 'No npub';
+                    
+                    // Fetch and set Bitcoin balance
+                    try {
+                        const addresses = await convertPublicKey(user.npub);
+                        const balanceResponse = await fetch(`https://blockchain.info/balance?active=${addresses.legacy},${addresses.nativeSegwit}`);
+                        const balanceData = await balanceResponse.json();
+                        
+                        // Sum up balances from both addresses
+                        const totalBalance = Object.values(balanceData)
+                            .reduce((sum, addr) => sum + (addr.final_balance || 0), 0);
+                        
+                        // Convert satoshis to BTC
+                        const btcBalance = (totalBalance / 100000000).toFixed(8);
+                        template.querySelector('.font-mono').textContent = `${btcBalance} BTC`;
+                    } catch (error) {
+                        template.querySelector('.font-mono').textContent = 'Error fetching balance';
+                    }
+
+                    cornychattersDiv.appendChild(template);
+                }
+            } catch (error) {
+                cornychattersDiv.innerHTML = `<p class="text-center text-red-500">Error: ${error.message}</p>`;
+            }
+        }
+
         // UI Functions
         function switchTab(tab) {
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -287,10 +368,25 @@
                 }
             });
             
-            // Clear results and input
-            document.getElementById('results').innerHTML = '';
-            document.getElementById('input').value = '';
-            document.getElementById('error').classList.add('hidden');
+            // Show/hide appropriate sections
+            const keyInputArea = document.getElementById('key-input-area');
+            const cornychatArea = document.getElementById('cornychat-area');
+            const resultsArea = document.getElementById('results');
+            
+            if (tab === 'cornychat') {
+                keyInputArea.classList.add('hidden');
+                resultsArea.classList.add('hidden');
+                cornychatArea.classList.remove('hidden');
+                fetchCornyChatters(); // Fetch data when switching to CornyChatters tab
+            } else {
+                keyInputArea.classList.remove('hidden');
+                resultsArea.classList.remove('hidden');
+                cornychatArea.classList.add('hidden');
+                // Clear results and input
+                resultsArea.innerHTML = '';
+                document.getElementById('input').value = '';
+                document.getElementById('error').classList.add('hidden');
+            }
         }
 
         // Theme toggle function
