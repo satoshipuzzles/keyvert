@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KeyVert - Nostr Key Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #1a1b26;
+            --bg-secondary: #24283b;
+            --text-primary: #a9b1d6;
+            --text-secondary: #7aa2f7;
+            --accent: #bb9af7;
+            --success: #9ece6a;
+            --error: #f7768e;
+            --card-bg: #1f2335;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        @media (min-width: 768px) {
+            .container {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1, h2 {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+
+        input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        button {
+            background-color: var(--accent);
+            color: var(--bg-primary);
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .copy-btn {
+            background-color: var(--text-secondary);
+            margin-left: 0.5rem;
+            padding: 0.5rem 1rem;
+        }
+
+        .result-container {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: var(--bg-secondary);
+            border-radius: 0.5rem;
+        }
+
+        .address-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .address-text {
+            flex-grow: 1;
+            word-break: break-all;
+        }
+
+        .qr-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .qr-code {
+            background-color: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            width: fit-content;
+        }
+
+        .error {
+            color: var(--error);
+            margin-bottom: 1rem;
+        }
+
+        .github-link {
+            position: fixed;
+            bottom: 1rem;
+            right: 1rem;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .github-link:hover {
+            color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>KeyVert - Nostr Key Converter</h1>
+            <input type="text" id="nostrKey" placeholder="Enter npub or nsec key">
+            <button onclick="convertKey()">Convert</button>
+            <div id="error" class="error"></div>
+            <div id="results" style="display: none;">
+                <div class="result-container">
+                    <h2>Legacy Address</h2>
+                    <div class="address-container">
+                        <span id="legacyAddress" class="address-text"></span>
+                        <button class="copy-btn" onclick="copyToClipboard('legacyAddress')">Copy</button>
+                    </div>
+                    <div id="legacyQR" class="qr-code"></div>
+                </div>
+                <div class="result-container">
+                    <h2>SegWit Address</h2>
+                    <div class="address-container">
+                        <span id="segwitAddress" class="address-text"></span>
+                        <button class="copy-btn" onclick="copyToClipboard('segwitAddress')">Copy</button>
+                    </div>
+                    <div id="segwitQR" class="qr-code"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <a href="https://github.com/satoshipuzzles/keyvert" class="github-link" target="_blank">
+        View on GitHub
+        <svg height="24" width="24" viewBox="0 0 16 16" version="1.1" fill="currentColor">
+            <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
+        </svg>
+    </a>
+
+    <script>
+        // Bech32 implementation
+        const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+        const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+        const bech32 = {
+            decode(str) {
+                let strLower = str.toLowerCase();
+                if (strLower !== str && str.toUpperCase() !== str) {
+                    throw new Error("Mixed case strings are not valid");
+                }
+                
+                const split = strLower.lastIndexOf('1');
+                if (split === -1) throw new Error("No separator character found");
+                if (split === 0) throw new Error("Missing prefix");
+                
+                const prefix = strLower.slice(0, split);
+                const wordChars = strLower.slice(split + 1);
+                if (wordChars.length < 6) throw new Error("Data too short");
+                
+                const words = [];
+                for (let i = 0; i < wordChars.length; i++) {
+                    const c = wordChars.charAt(i);
+                    const v = CHARSET.indexOf(c);
+                    if (v === -1) throw new Error("Unknown character " + c);
+                    words.push(v);
+                }
+                
+                return {
+                    prefix: prefix,
+                    words: words.slice(0, -6)
+                };
+            },
+
+            encode(prefix, words) {
+                const data = [...words];
+                const values = [...prefix.split('').map(c => c.charCodeAt(0) & 31), 0, ...data];
+                const checksum = polymod(values.concat([0, 0, 0, 0, 0, 0])) ^ 1;
+                const checksumWords = [];
+                for (let i = 0; i < 6; ++i) {
+                    checksumWords[i] = (checksum >> (5 * (5 - i))) & 31;
+                }
+                return prefix + '1' + [...data, ...checksumWords].map(v => CHARSET.charAt(v)).join('');
+            },
+
+            fromWords(words) {
+                const res = [];
+                let bits = 0;
+                let value = 0;
+                
+                for (let i = 0; i < words.length; i++) {
+                    value = (value << 5) | words[i];
+                    bits += 5;
+                    
+                    while (bits >= 8) {
+                        bits -= 8;
+                        res.push((value >> bits) & 0xff);
+                    }
+                }
+                
+                return new Uint8Array(res);
+            },
+
+            toWords(bytes) {
+                const res = [];
+                let bits = 0;
+                let value = 0;
+                
+                for (let i = 0; i < bytes.length; i++) {
+                    value = (value << 8) | bytes[i];
+                    bits += 8;
+                    
+                    while (bits >= 5) {
+                        bits -= 5;
+                        res.push((value >> bits) & 31);
+                    }
+                }
+                
+                if (bits > 0) {
+                    res.push((value << (5 - bits)) & 31);
+                }
+                
+                return res;
+            }
+        };
+
+        function polymod(values) {
+            let chk = 1;
+            for (let p = 0; p < values.length; ++p) {
+                const top = chk >> 25;
+                chk = (chk & 0x1ffffff) << 5 ^ values[p];
+                for (let i = 0; i < 5; ++i) {
+                    if ((top >> i) & 1) {
+                        chk ^= GENERATOR[i];
+                    }
+                }
+            }
+            return chk;
+        }
+
+        // Bitcoin address generation functions
+        function npubToHex(npub) {
+            try {
+                const decoded = bech32.decode(npub);
+                const data = decoded.words;
+                const bytes = bech32.fromWords(data);
+                return bytesToHex(bytes);
+            } catch (e) {
+                throw new Error("Invalid npub format");
+            }
+        }
+
+        function bytesToHex(bytes) {
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function hexToBytes(hex) {
+            return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        }
+
+        function sha256(buffer) {
+            const hex = Array.from(buffer)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+            const hash = CryptoJS.SHA256(CryptoJS.enc.Hex.parse(hex));
+            return new Uint8Array(hash.toString(CryptoJS.enc.Hex).match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        }
+
+        function ripemd160(buffer) {
+            const hex = Array.from(buffer)
+                .map(b => b.toString(16).padStart(2, '0'))
+                .join('');
+            const hash = CryptoJS.RIPEMD160(CryptoJS.enc.Hex.parse(hex));
+            return new Uint8Array(hash.toString(CryptoJS.enc.Hex).match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        }
+
+        const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+        function base58Encode(buffer) {
+            let n = BigInt(0);
+            for (const byte of buffer) {
+                n = n * BigInt(256) + BigInt(byte);
+            }
+            
+            let result = '';
+            while (n > 0) {
+                const remainder = Number(n % BigInt(58));
+                n = n / BigInt(58);
+                result = BASE58_ALPHABET[remainder] + result;
+            }
+            
+            for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
+                result = '1' + result;
+            }
+            
+            return result;
+        }
+
+        function pubkeyToLegacyAddress(pubkeyHex) {
+            try {
+                const pubkeyBytes = hexToBytes(pubkeyHex);
+                const sha256Hash = sha256(pubkeyBytes);
+                const ripemdHash = ripemd160(sha256Hash);
+                const versionByte = new Uint8Array([0x00, ...ripemdHash]);
+                const checksum = sha256(sha256(versionByte)).slice(0, 4);
+                const finalBytes = new Uint8Array([...versionByte, ...checksum]);
+                return base58Encode(finalBytes);
+            } catch (error) {
+                throw new Error(`Failed to generate legacy address: ${error.message}`);
+            }
+        }
+
+        function pubkeyToSegwitAddress(pubkeyHex) {
+            try {
+                const pubkeyBytes = hexToBytes(pubkeyHex);
+                const sha256Hash = sha256(pubkeyBytes);
+                const ripemdHash = ripemd160(sha256Hash);
+                const words = bech32.toWords(ripemdHash);
+                const version = 0;
+                const data = [version, ...words];
+                return bech32.encode('bc', data);
+            } catch (error) {
+                throw new Error(`Failed to generate SegWit address: ${error.message}`);
+            }
+        }
+
+        // UI Functions
+        async function convertKey() {
+            const nostrKey = document.getElementById('nostrKey').value;
+            const errorDiv = document.getElementById('error');
+            const resultsDiv = document.getElementById('results');
+
+            try {
+                errorDiv.textContent = '';
+                if (!nostrKey.startsWith('npub1') && !nostrKey.startsWith('nsec1')) {
+                    throw new Error('Invalid Nostr key format. Must start with npub1 or nsec1');
+                }
+
+                const pubkeyHex = npubToHex(nostrKey);
+                const legacyAddress = pubkeyToLegacyAddress(pubkeyHex);
+                const segwitAddress = pubkeyToSegwitAddress(pubkeyHex);
+
+                document.getElementById('legacyAddress').textContent = legacyAddress;
+                document.getElementById('segwitAddress').textContent = segwitAddress;
+
+                // Generate QR codes
+                document.getElementById('legacyQR').innerHTML = '';
+                document.getElementById('segwitQR').innerHTML = '';
+                new QRCode(document.getElementById('legacyQR'), {
+                    text: legacyAddress,
+                    width: 128,
+                    height: 128
+                });
+                new QRCode(document.getElementById('segwitQR'), {
+                    text: segwitAddress,
+                    width: 128,
+                    height: 128
+                });
+
+                resultsDiv.style.display = 'block';
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                resultsDiv.style.display = 'none';
+            }
+        }
+
+        async function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                const button = event.target;
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                setTimeout(() => {
+                    button.textContent = originalText;
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text: ', err);
+            }
+        }
+
+        // Add enter key support
+        document.getElementById('nostrKey').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                convertKey();
+            }
+        });
+    </script>
+</body>
+</html> 
