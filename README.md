@@ -1,46 +1,58 @@
-# Keyvert
+# Keyvert - Nostr Key Converter
 
-A secure, offline-capable Nostr key converter that transforms Nostr public keys (npubs) and private keys (nsecs) into Bitcoin addresses and WIF format keys. This tool runs entirely in your browser with no server requirements.
+A secure, offline-first tool for converting Nostr keys to Bitcoin format. Convert your npubs to Bitcoin addresses and nsecs to WIF format private keys.
 
 ## Features
 
-- Convert Nostr public keys (npubs) to Bitcoin addresses (Legacy and Native SegWit)
-- Convert Nostr private keys (nsecs) to Bitcoin WIF format (offline only)
-- Generate QR codes for easy scanning
-- Batch conversion support
-- Completely offline capable
-- No server required
+- Convert Nostr public keys (npubs) to:
+  - Legacy Bitcoin addresses (P2PKH)
+  - Native SegWit addresses (P2WPKH)
+- Convert Nostr private keys (nsecs) to Bitcoin WIF format
+- Batch conversion support (multiple keys at once)
+- QR code generation for addresses
 - Copy-to-clipboard functionality
+- Completely offline operation for private keys
+- No server-side processing - all conversions happen in your browser
 
 ## Security Features
 
-- Private key operations work offline only
-- Clear security warnings and best practices
-- All conversions happen locally in your browser
-- No data is ever sent to any server
+- Enforced offline mode for private key operations
+- Clear security warnings and instructions
+- No data transmission - works entirely in your browser
+- Open source code for transparency
 
 ## Usage
 
-1. Download `keyvert.html` to your computer
-2. For public key (npub) conversions:
-   - Open `keyvert.html` in your browser
-   - Enter npub keys in the input field
-   - Click "Convert" to see Bitcoin addresses
-   - Use QR codes or copy buttons as needed
+1. For public key (npub) conversion:
+   - Visit the tool in your browser
+   - Enter one or more npubs (one per line)
+   - Click "Convert" to see Bitcoin addresses and QR codes
 
-3. For private key (nsec) conversions:
+2. For private key (nsec) conversion:
+   - Save the HTML file to your computer
    - Disconnect from the internet
-   - Open `keyvert.html` in your browser
-   - Switch to the "Private Key" tab
-   - Enter nsec keys
+   - Open the saved file in your browser
+   - Enter your nsec(s)
    - Click "Convert" to see WIF format keys
-   - Copy the results
-   - Close the browser tab when done
 
-## Security Warning
+## Development
 
-Never enter private keys (nsecs) on any website while connected to the internet. Always perform private key operations offline. This tool is provided as-is with no warranty. Always verify the results with other tools before using in production.
+This is a pure HTML/JavaScript application with no build process required. It uses:
+
+- TailwindCSS for styling
+- Noble Secp256k1 for cryptographic operations
+- QRCode.js for QR code generation
+- Bech32 for address encoding
+- Base58 for WIF encoding
 
 ## License
 
-MIT License 
+MIT License - See LICENSE file for details.
+
+## Security Notice
+
+⚠️ **NEVER enter private keys (nsecs) on any website while connected to the internet. Always perform private key operations offline.**
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request. 

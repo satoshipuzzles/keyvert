@@ -4,109 +4,99 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nostr Key Converter (Offline)</title>
-    <script src="https://cdn.jsdelivr.net/npm/noble-secp256k1@1.2.14/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bech32@2.0.0/dist/index.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bs58@5.0.0/dist/bs58.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/noble-secp256k1@1.2.14/index.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/base58-js@2.0.0/base58.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bech32@2.0.0/dist/index.min.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen p-8">
-    <div class="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
-        <h1 class="text-3xl font-bold mb-6 text-center text-gray-800">Nostr Key Converter</h1>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <h1 class="text-3xl font-bold mb-4 text-center">Nostr Key Converter</h1>
         
         <!-- Security Warning -->
-        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-6">
+        <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-8" role="alert">
             <p class="font-bold">⚠️ Security Warning</p>
-            <p>Never enter private keys on any website. For private key operations:</p>
-            <ol class="list-decimal ml-6">
-                <li>Save this file to your computer</li>
-                <li>Disconnect from the internet</li>
-                <li>Then open the file in your browser</li>
-            </ol>
+            <p>Never enter private keys (nsecs) on any website while connected to the internet. Always perform private key operations offline.</p>
         </div>
 
         <!-- Tabs -->
-        <div class="mb-6">
+        <div class="mb-8">
             <div class="border-b border-gray-200">
-                <nav class="-mb-px flex">
-                    <button onclick="switchTab('public')" id="public-tab" class="tab-button active w-1/2 py-2 px-4 text-center border-b-2 font-medium text-sm">
-                        Public Key (npub)
+                <nav class="-mb-px flex" aria-label="Tabs">
+                    <button onclick="switchTab('public')" class="tab-btn active w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="public">
+                        Public Keys (npub)
                     </button>
-                    <button onclick="switchTab('private')" id="private-tab" class="tab-button w-1/2 py-2 px-4 text-center border-b-2 font-medium text-sm">
-                        Private Key (nsec)
+                    <button onclick="switchTab('private')" class="tab-btn w-1/2 py-4 px-1 text-center border-b-2 font-medium text-sm" data-tab="private">
+                        Private Keys (nsec)
                     </button>
                 </nav>
             </div>
         </div>
 
-        <!-- Input Section -->
-        <div class="mb-6">
-            <textarea id="input" rows="3" class="w-full p-3 border rounded-lg" 
-                     placeholder="Enter keys (one per line)"></textarea>
-            <button onclick="convertKeys()" class="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600">
+        <!-- Input Area -->
+        <div class="mb-8">
+            <textarea id="input" rows="4" class="w-full p-4 border rounded-lg shadow-sm" 
+                      placeholder="Enter Nostr keys (one per line)"></textarea>
+            <button onclick="convertKeys()" class="mt-4 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                 Convert
             </button>
         </div>
 
-        <!-- Results Section -->
-        <div id="results" class="space-y-6"></div>
+        <!-- Results Area -->
+        <div id="results" class="grid grid-cols-1 gap-6"></div>
 
         <!-- Templates -->
         <template id="public-result-template">
-            <div class="border rounded-lg p-4 bg-gray-50">
-                <div class="mb-2">
-                    <span class="font-semibold">Input:</span>
-                    <span class="npub-value break-all"></span>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Input Key</h3>
+                    <p class="text-sm text-gray-500 break-all"></p>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <div class="mb-2">
-                            <span class="font-semibold">Legacy Address:</span>
-                            <button class="copy-btn ml-2 text-blue-500 hover:text-blue-700">Copy</button>
-                        </div>
-                        <div class="legacy-address break-all"></div>
-                        <div class="qr-code mt-2"></div>
+                <div class="mb-4">
+                    <h4 class="text-sm font-medium text-gray-700">Legacy Address (P2PKH)</h4>
+                    <div class="flex items-center mt-1">
+                        <input type="text" readonly class="flex-1 p-2 text-sm bg-gray-50 rounded border">
+                        <button onclick="copyToClipboard(this)" class="ml-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Copy
+                        </button>
                     </div>
-                    <div>
-                        <div class="mb-2">
-                            <span class="font-semibold">Native SegWit Address:</span>
-                            <button class="copy-btn ml-2 text-blue-500 hover:text-blue-700">Copy</button>
-                        </div>
-                        <div class="segwit-address break-all"></div>
-                        <div class="qr-code mt-2"></div>
+                    <div class="qr-code mt-2"></div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-700">Native SegWit Address (P2WPKH)</h4>
+                    <div class="flex items-center mt-1">
+                        <input type="text" readonly class="flex-1 p-2 text-sm bg-gray-50 rounded border">
+                        <button onclick="copyToClipboard(this)" class="ml-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Copy
+                        </button>
                     </div>
+                    <div class="qr-code mt-2"></div>
                 </div>
             </div>
         </template>
 
         <template id="private-result-template">
-            <div class="border rounded-lg p-4 bg-gray-50">
-                <div class="mb-2">
-                    <span class="font-semibold">Input:</span>
-                    <span class="nsec-value break-all"></span>
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Input Key</h3>
+                    <p class="text-sm text-gray-500 break-all"></p>
                 </div>
                 <div>
-                    <div class="mb-2">
-                        <span class="font-semibold">WIF Private Key:</span>
-                        <button class="copy-btn ml-2 text-blue-500 hover:text-blue-700">Copy</button>
+                    <h4 class="text-sm font-medium text-gray-700">Bitcoin WIF</h4>
+                    <div class="flex items-center mt-1">
+                        <input type="text" readonly class="flex-1 p-2 text-sm bg-gray-50 rounded border">
+                        <button onclick="copyToClipboard(this)" class="ml-2 px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                            Copy
+                        </button>
                     </div>
-                    <div class="wif-key break-all"></div>
                 </div>
             </div>
         </template>
-
-        <!-- About Section -->
-        <div class="mt-8 pt-6 border-t border-gray-200">
-            <h2 class="text-xl font-semibold mb-4">About</h2>
-            <p class="text-gray-600">
-                This tool converts Nostr keys to Bitcoin format. It runs completely in your browser - no data is ever sent to any server.
-                The code is open source and available on <a href="https://github.com/satoshipuzzles/keyvert" class="text-blue-500 hover:text-blue-700">GitHub</a>.
-            </p>
-        </div>
     </div>
 
     <script>
-        // Utility functions
+        // Utility Functions
         function hexToBytes(hex) {
             const bytes = new Uint8Array(hex.length / 2);
             for (let i = 0; i < bytes.length; i++) {
@@ -121,100 +111,41 @@
                 .join('');
         }
 
-        async function sha256(data) {
-            if (typeof data === 'string') {
-                data = new TextEncoder().encode(data);
-            }
-            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-            return new Uint8Array(hashBuffer);
+        function sha256(data) {
+            return crypto.subtle.digest('SHA-256', data);
         }
 
         async function doubleSha256(data) {
-            return sha256(await sha256(data));
+            const firstHash = await sha256(data);
+            return sha256(firstHash);
         }
 
-        // Base58Check encoding with version byte
-        function base58Check(payload, version) {
-            const versionAndPayload = new Uint8Array(payload.length + 1);
-            versionAndPayload[0] = version;
-            versionAndPayload.set(payload, 1);
+        async function base58Check(data, version) {
+            const versionedData = new Uint8Array(data.length + 1);
+            versionedData[0] = version;
+            versionedData.set(data, 1);
             
-            return doubleSha256(versionAndPayload).then(hash => {
-                const checksum = hash.slice(0, 4);
-                const finalPayload = new Uint8Array(versionAndPayload.length + 4);
-                finalPayload.set(versionAndPayload);
-                finalPayload.set(checksum, versionAndPayload.length);
-                return bs58.encode(finalPayload);
-            });
-        }
-
-        // Key conversion functions
-        async function npubToHex(npub) {
-            const decoded = bech32.decode(npub);
-            if (decoded.prefix !== 'npub') {
-                throw new Error('Invalid npub key');
-            }
-            const data = bech32.fromWords(decoded.words);
-            return bytesToHex(new Uint8Array(data));
-        }
-
-        async function nsecToHex(nsec) {
-            const decoded = bech32.decode(nsec);
-            if (decoded.prefix !== 'nsec') {
-                throw new Error('Invalid nsec key');
-            }
-            const data = bech32.fromWords(decoded.words);
-            return bytesToHex(new Uint8Array(data));
-        }
-
-        async function pubkeyToAddresses(pubkeyHex) {
-            const pubkeyBytes = hexToBytes(pubkeyHex);
+            const checksum = new Uint8Array(await doubleSha256(versionedData)).slice(0, 4);
+            const final = new Uint8Array(versionedData.length + 4);
+            final.set(versionedData);
+            final.set(checksum, versionedData.length);
             
-            // Get compressed public key
-            const compressedPubkey = secp256k1.Point.fromHex(pubkeyHex).toRawBytes(true);
-            
-            // Hash for legacy address (P2PKH)
-            const pubkeyHash = await sha256(compressedPubkey);
-            const legacyHash = new Uint8Array(20); // RIPEMD160
-            for (let i = 0; i < 20; i++) {
-                legacyHash[i] = pubkeyHash[i];
-            }
-            const legacyAddress = await base58Check(legacyHash, 0x00);
-
-            // Hash for native SegWit (P2WPKH)
-            const words = bech32.toWords(legacyHash);
-            const segwitAddress = bech32.encode('bc', [0].concat(words));
-
-            return {
-                legacy: legacyAddress,
-                segwit: segwitAddress
-            };
+            return base58.encode(final);
         }
 
-        async function privkeyToWIF(privkeyHex) {
-            const privkeyBytes = hexToBytes(privkeyHex);
-            
-            // Add compression flag
-            const extendedKey = new Uint8Array(privkeyBytes.length + 1);
-            extendedKey.set(privkeyBytes);
-            extendedKey[privkeyBytes.length] = 0x01; // Compressed pubkey flag
-            
-            // Encode as WIF
-            return base58Check(extendedKey, 0x80);
-        }
-
-        // UI functions
+        // UI Functions
         function switchTab(tab) {
-            document.querySelectorAll('.tab-button').forEach(btn => {
-                btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
-                btn.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.dataset.tab === tab) {
+                    btn.classList.add('active', 'border-blue-500', 'text-blue-600');
+                    btn.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                } else {
+                    btn.classList.remove('active', 'border-blue-500', 'text-blue-600');
+                    btn.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+                }
             });
             
-            const activeBtn = document.getElementById(`${tab}-tab`);
-            activeBtn.classList.add('active', 'border-blue-500', 'text-blue-600');
-            activeBtn.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
-            
-            // Clear results when switching tabs
+            // Clear results and input
             document.getElementById('results').innerHTML = '';
             document.getElementById('input').value = '';
         }
@@ -225,86 +156,90 @@
             const results = document.getElementById('results');
             results.innerHTML = '';
 
-            const isPrivateTab = document.getElementById('private-tab').classList.contains('active');
-            
-            if (isPrivateTab && window.navigator.onLine) {
-                alert('⚠️ WARNING: You are currently online. For security, please disconnect from the internet before converting private keys.');
+            const activeTab = document.querySelector('.tab-btn.active').dataset.tab;
+            const template = document.getElementById(`${activeTab}-result-template`);
+
+            for (const line of lines) {
+                const clone = template.content.cloneNode(true);
+                clone.querySelector('p').textContent = line;
+
+                if (activeTab === 'public') {
+                    await convertPublicKey(line, clone);
+                } else {
+                    await convertPrivateKey(line, clone);
+                }
+
+                results.appendChild(clone);
+            }
+        }
+
+        async function convertPublicKey(npub, template) {
+            try {
+                // Decode npub
+                const decoded = bech32.decode(npub);
+                if (decoded.prefix !== 'npub') throw new Error('Invalid npub');
+                
+                const pubkeyBytes = new Uint8Array(bech32.fromWords(decoded.words));
+                
+                // Generate Legacy address
+                const sha256Hash = await sha256(pubkeyBytes);
+                const ripemd160Hash = new Uint8Array(await crypto.subtle.digest('RIPEMD-160', sha256Hash));
+                const legacyAddress = await base58Check(ripemd160Hash, 0x00);
+                
+                // Generate Native SegWit address
+                const words = bech32.toWords(ripemd160Hash);
+                const bech32Address = bech32.encode('bc', [0].concat(words));
+
+                // Update UI
+                const inputs = template.querySelectorAll('input');
+                inputs[0].value = legacyAddress;
+                inputs[1].value = bech32Address;
+
+                // Generate QR codes
+                const qrDivs = template.querySelectorAll('.qr-code');
+                await QRCode.toCanvas(qrDivs[0], legacyAddress, { width: 128 });
+                await QRCode.toCanvas(qrDivs[1], bech32Address, { width: 128 });
+            } catch (error) {
+                console.error('Error converting public key:', error);
+            }
+        }
+
+        async function convertPrivateKey(nsec, template) {
+            if (window.navigator.onLine) {
+                template.querySelector('input').value = 'ERROR: Must be offline for private key operations';
                 return;
             }
 
-            for (const line of lines) {
-                try {
-                    if (isPrivateTab) {
-                        await processPrivateKey(line);
-                    } else {
-                        await processPublicKey(line);
-                    }
-                } catch (error) {
-                    showError(line, error.message);
-                }
+            try {
+                // Decode nsec
+                const decoded = bech32.decode(nsec);
+                if (decoded.prefix !== 'nsec') throw new Error('Invalid nsec');
+                
+                const privkeyBytes = new Uint8Array(bech32.fromWords(decoded.words));
+                
+                // Convert to WIF
+                const wif = await base58Check(privkeyBytes, 0x80);
+                template.querySelector('input').value = wif;
+            } catch (error) {
+                console.error('Error converting private key:', error);
+                template.querySelector('input').value = 'Error: Invalid private key';
             }
         }
 
-        async function processPublicKey(npub) {
-            const template = document.getElementById('public-result-template');
-            const clone = template.content.cloneNode(true);
-            
-            const pubkeyHex = await npubToHex(npub);
-            const addresses = await pubkeyToAddresses(pubkeyHex);
-            
-            clone.querySelector('.npub-value').textContent = npub;
-            clone.querySelector('.legacy-address').textContent = addresses.legacy;
-            clone.querySelector('.segwit-address').textContent = addresses.segwit;
-            
-            // Generate QR codes
-            const qrDivs = clone.querySelectorAll('.qr-code');
-            await QRCode.toCanvas(qrDivs[0], addresses.legacy);
-            await QRCode.toCanvas(qrDivs[1], addresses.segwit);
-            
-            // Setup copy buttons
-            const copyBtns = clone.querySelectorAll('.copy-btn');
-            copyBtns[0].onclick = () => copyToClipboard(addresses.legacy, copyBtns[0]);
-            copyBtns[1].onclick = () => copyToClipboard(addresses.segwit, copyBtns[1]);
-            
-            document.getElementById('results').appendChild(clone);
-        }
-
-        async function processPrivateKey(nsec) {
-            const template = document.getElementById('private-result-template');
-            const clone = template.content.cloneNode(true);
-            
-            const privkeyHex = await nsecToHex(nsec);
-            const wif = await privkeyToWIF(privkeyHex);
-            
-            clone.querySelector('.nsec-value').textContent = nsec;
-            clone.querySelector('.wif-key').textContent = wif;
-            
-            // Setup copy button
-            const copyBtn = clone.querySelector('.copy-btn');
-            copyBtn.onclick = () => copyToClipboard(wif, copyBtn);
-            
-            document.getElementById('results').appendChild(clone);
-        }
-
-        function showError(input, message) {
-            const div = document.createElement('div');
-            div.className = 'border rounded-lg p-4 bg-red-50 text-red-700 mb-4';
-            div.innerHTML = `
-                <div class="font-semibold">Error processing: ${input}</div>
-                <div>${message}</div>
-            `;
-            document.getElementById('results').appendChild(div);
-        }
-
-        async function copyToClipboard(text, button) {
-            try {
-                await navigator.clipboard.writeText(text);
+        function copyToClipboard(button) {
+            const input = button.parentElement.querySelector('input');
+            navigator.clipboard.writeText(input.value).then(() => {
                 const originalText = button.textContent;
                 button.textContent = 'Copied!';
-                setTimeout(() => button.textContent = originalText, 2000);
-            } catch (err) {
-                alert('Failed to copy to clipboard');
-            }
+                button.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+                button.classList.add('bg-green-500', 'hover:bg-green-600');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    button.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                }, 2000);
+            });
         }
 
         // Initialize
