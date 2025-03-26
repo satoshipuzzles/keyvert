@@ -1,8 +1,20 @@
-# CornyCHAT MCP Server for Cursor
+# Keyvert - Nostr Key Converter & CornyCHAT Integration
 
-This is a Model Context Protocol (MCP) server implementation for integrating CornyCHAT with Cursor. It provides commands for interacting with CornyCHAT rooms and users.
+A secure, offline-first tool for converting Nostr keys to Bitcoin format, with additional CornyCHAT integration capabilities. Convert your npubs to Bitcoin addresses, nsecs to WIF format private keys, and interact with CornyCHAT rooms and users.
 
-## Features
+## Key Converter Features
+
+- Convert Nostr public keys (npubs) to:
+  - Legacy Bitcoin addresses (P2PKH)
+  - Native SegWit addresses (P2WPKH)
+- Convert Nostr private keys (nsecs) to Bitcoin WIF format
+- Batch conversion support (multiple keys at once)
+- QR code generation for addresses
+- Copy-to-clipboard functionality
+- Completely offline operation for private keys
+- No server-side processing for key conversions
+
+## CornyCHAT Integration Features
 
 - Get list of active rooms
 - Get room details
@@ -10,73 +22,12 @@ This is a Model Context Protocol (MCP) server implementation for integrating Cor
 - Get user information (including Lightning wallet and Nostr pubkey)
 - Get active users across all rooms
 
-## Setup
+## Security Features
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-2. Copy the `mcp.json` file to your Cursor MCP configuration directory.
-
-## Available Commands
-
-### Get Active Rooms
-```python
-mcp_cornychat_get_active_rooms()
-```
-
-### Get Room Details
-```python
-mcp_cornychat_get_room_details(room_id="room_name_or_id")
-```
-
-### Create Room
-```python
-mcp_cornychat_create_room(
-    name="my_room",
-    description="My awesome room",
-    logo_uri="https://example.com/logo.png",
-    is_stage_only=False,
-    is_protected=False,
-    owner_pubkey="npub..."  # Optional, will generate if not provided
-)
-```
-
-### Get User Info
-```python
-mcp_cornychat_get_user_info(user_id="user_id")
-```
-
-### Get Active Users
-```python
-mcp_cornychat_get_active_users()
-```
-
-## API Documentation
-
-The server uses the CornyCHAT API endpoints:
-
-- `/roomlist/` - Get active rooms
-- `/rooms/{room_id}` - Get/create room details
-- `/users/{user_id}` - Get user information
-- `/zapgoal/{emoji}` - Get zap goals
-
-## Contributing
-
-Feel free to submit issues and enhancement requests!
-
-# Nostr npub to Bitcoin Address Converter
-
-A web application that converts Nostr public keys (npubs) to Bitcoin addresses. This tool demonstrates the interoperability between Nostr and Bitcoin networks by leveraging their shared use of the secp256k1 elliptic curve.
-
-## Features
-
-- Convert Nostr npubs to hex public keys
-- Generate Bitcoin Legacy (P2PKH) addresses
-- Modern, responsive web interface
-- Real-time validation and error handling
-- Detailed technical information display
+- Enforced offline mode for private key operations
+- Clear security warnings and instructions
+- No data transmission for key conversions - works entirely in your browser
+- Open source code for transparency
 
 ## Installation
 
@@ -99,6 +50,8 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Key Converter
+
 1. Start the web server:
 ```bash
 python npub_to_btc_converter.py
@@ -109,23 +62,48 @@ python npub_to_btc_converter.py
 http://localhost:5002
 ```
 
-3. Enter a Nostr npub and click "Convert" to see the corresponding Bitcoin address.
+3. Enter Nostr keys and click "Convert" to see the corresponding Bitcoin addresses.
+
+### CornyCHAT Integration
+
+Available commands through the MCP server:
+
+```python
+# Get active rooms
+mcp_cornychat_get_active_rooms()
+
+# Get room details
+mcp_cornychat_get_room_details(room_id="room_name_or_id")
+
+# Create room
+mcp_cornychat_create_room(
+    name="my_room",
+    description="My awesome room",
+    logo_uri="https://example.com/logo.png",
+    is_stage_only=False,
+    is_protected=False,
+    owner_pubkey="npub..."  # Optional
+)
+
+# Get user info
+mcp_cornychat_get_user_info(user_id="user_id")
+
+# Get active users
+mcp_cornychat_get_active_users()
+```
 
 ## Technical Details
 
-This converter implements the address derivation process as specified in NIP-BTCADDR:
+The key converter implements the address derivation process as specified in NIP-BTCADDR:
 
 1. Decodes the bech32-encoded npub to get the public key
 2. Performs SHA256 and RIPEMD160 hashing on the public key
 3. Adds version byte and checksum
-4. Encodes the result in Base58 format
+4. Encodes the result in Base58 format for legacy addresses or Bech32 for SegWit
 
-## Security Considerations
+## Security Notice
 
-- All conversions are performed client-side
-- No private keys are ever used or required
-- The generated addresses are deterministic
-- The tool only generates mainnet addresses
+⚠️ **NEVER enter private keys (nsecs) on any website while connected to the internet. Always perform private key operations offline.**
 
 ## Contributing
 
@@ -134,9 +112,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- Nostr Protocol
-- Bitcoin Protocol
-- Secp256k1 Curve 

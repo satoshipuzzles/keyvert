@@ -1,6 +1,7 @@
-requests>=2.31.0
+flask==3.0.2
+requests==2.31.0
 python-dotenv>=1.0.0
-flask==2.3.3
 base58==2.1.1
 bech32==1.2.0
-qrcode[pil]>=7.4.2 
+qrcode[pil]>=7.4.2
+bip_utils==2.7.1
