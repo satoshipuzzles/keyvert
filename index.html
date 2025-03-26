@@ -148,7 +148,7 @@
     <div class="container">
         <div class="card">
             <h1>KeyVert - Nostr Key Converter</h1>
-            <input type="text" id="nostrKey" placeholder="Enter npub or nsec key">
+            <input type="text" id="nostrKey" placeholder="Enter npub or nsec key" onkeypress="if(event.key === 'Enter') convertKey()">
             <button onclick="convertKey()">Convert</button>
             <div id="error" class="error"></div>
             <div id="results" style="display: none;">
@@ -184,44 +184,88 @@
         const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
         const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
 
+        function polymod(values) {
+            let chk = 1;
+            for (let p = 0; p < values.length; ++p) {
+                const top = chk >> 25;
+                chk = (chk & 0x1ffffff) << 5 ^ values[p];
+                for (let i = 0; i < 5; ++i) {
+                    if ((top >> i) & 1) {
+                        chk ^= GENERATOR[i];
+                    }
+                }
+            }
+            return chk;
+        }
+
+        function hrpExpand(hrp) {
+            const ret = [];
+            for (let i = 0; i < hrp.length; ++i) {
+                ret.push(hrp.charCodeAt(i) >> 5);
+            }
+            ret.push(0);
+            for (let i = 0; i < hrp.length; ++i) {
+                ret.push(hrp.charCodeAt(i) & 31);
+            }
+            return ret;
+        }
+
+        function verifyChecksum(hrp, data) {
+            return polymod(hrpExpand(hrp).concat(data)) === 1;
+        }
+
+        function createChecksum(hrp, data) {
+            const values = hrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+            const mod = polymod(values) ^ 1;
+            const ret = [];
+            for (let p = 0; p < 6; ++p) {
+                ret.push((mod >> 5 * (5 - p)) & 31);
+            }
+            return ret;
+        }
+
         const bech32 = {
             decode(str) {
-                let strLower = str.toLowerCase();
-                if (strLower !== str && str.toUpperCase() !== str) {
-                    throw new Error("Mixed case strings are not valid");
+                if (str.length < 8) {
+                    throw new Error("Input too short");
+                }
+                if (str.length > 90) {
+                    throw new Error("Input too long");
                 }
                 
-                const split = strLower.lastIndexOf('1');
-                if (split === -1) throw new Error("No separator character found");
-                if (split === 0) throw new Error("Missing prefix");
+                const lowered = str.toLowerCase();
+                const uppered = str.toUpperCase();
+                if (str !== lowered && str !== uppered) {
+                    throw new Error("Mixed case string");
+                }
+                str = lowered;
                 
-                const prefix = strLower.slice(0, split);
-                const wordChars = strLower.slice(split + 1);
-                if (wordChars.length < 6) throw new Error("Data too short");
+                const split = str.lastIndexOf('1');
+                if (split === -1) {
+                    throw new Error("No separator character");
+                }
+                if (split === 0) {
+                    throw new Error("Missing HRP");
+                }
                 
-                const words = [];
-                for (let i = 0; i < wordChars.length; i++) {
-                    const c = wordChars.charAt(i);
-                    const v = CHARSET.indexOf(c);
-                    if (v === -1) throw new Error("Unknown character " + c);
-                    words.push(v);
+                const hrp = str.substring(0, split);
+                const data = [];
+                for (let i = split + 1; i < str.length; i++) {
+                    const d = CHARSET.indexOf(str.charAt(i));
+                    if (d === -1) {
+                        throw new Error("Invalid character " + str.charAt(i));
+                    }
+                    data.push(d);
+                }
+                
+                if (!verifyChecksum(hrp, data)) {
+                    throw new Error("Invalid checksum");
                 }
                 
                 return {
-                    prefix: prefix,
-                    words: words.slice(0, -6)
+                    prefix: hrp,
+                    words: data.slice(0, -6)
                 };
-            },
-
-            encode(prefix, words) {
-                const data = [...words];
-                const values = [...prefix.split('').map(c => c.charCodeAt(0) & 31), 0, ...data];
-                const checksum = polymod(values.concat([0, 0, 0, 0, 0, 0])) ^ 1;
-                const checksumWords = [];
-                for (let i = 0; i < 6; ++i) {
-                    checksumWords[i] = (checksum >> (5 * (5 - i))) & 31;
-                }
-                return prefix + '1' + [...data, ...checksumWords].map(v => CHARSET.charAt(v)).join('');
             },
 
             fromWords(words) {
@@ -240,165 +284,165 @@
                 }
                 
                 return new Uint8Array(res);
-            },
-
-            toWords(bytes) {
-                const res = [];
-                let bits = 0;
-                let value = 0;
-                
-                for (let i = 0; i < bytes.length; i++) {
-                    value = (value << 8) | bytes[i];
-                    bits += 8;
-                    
-                    while (bits >= 5) {
-                        bits -= 5;
-                        res.push((value >> bits) & 31);
-                    }
-                }
-                
-                if (bits > 0) {
-                    res.push((value << (5 - bits)) & 31);
-                }
-                
-                return res;
             }
         };
 
-        function polymod(values) {
-            let chk = 1;
-            for (let p = 0; p < values.length; ++p) {
-                const top = chk >> 25;
-                chk = (chk & 0x1ffffff) << 5 ^ values[p];
-                for (let i = 0; i < 5; ++i) {
-                    if ((top >> i) & 1) {
-                        chk ^= GENERATOR[i];
+        // Base58 implementation
+        const ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+        const base58 = {
+            encode(buffer) {
+                if (buffer.length === 0) return '';
+                
+                let digits = [0];
+                for (let i = 0; i < buffer.length; i++) {
+                    let carry = buffer[i];
+                    for (let j = 0; j < digits.length; j++) {
+                        carry += digits[j] << 8;
+                        digits[j] = carry % 58;
+                        carry = (carry / 58) | 0;
+                    }
+                    
+                    while (carry > 0) {
+                        digits.push(carry % 58);
+                        carry = (carry / 58) | 0;
                     }
                 }
+                
+                let string = '';
+                for (let i = digits.length - 1; i >= 0; i--) {
+                    string += ALPHABET[digits[i]];
+                }
+                
+                return string;
             }
-            return chk;
-        }
+        };
 
-        // Bitcoin address generation functions
-        function npubToHex(npub) {
-            try {
-                const decoded = bech32.decode(npub);
-                const data = decoded.words;
-                const bytes = bech32.fromWords(data);
-                return bytesToHex(bytes);
-            } catch (e) {
-                throw new Error("Invalid npub format");
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < bytes.length; i++) {
+                bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
             }
+            return bytes;
         }
 
         function bytesToHex(bytes) {
-            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-        }
-
-        function hexToBytes(hex) {
-            return new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        }
-
-        function sha256(buffer) {
-            const hex = Array.from(buffer)
+            return Array.from(bytes)
                 .map(b => b.toString(16).padStart(2, '0'))
                 .join('');
-            const hash = CryptoJS.SHA256(CryptoJS.enc.Hex.parse(hex));
-            return new Uint8Array(hash.toString(CryptoJS.enc.Hex).match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
         }
 
-        function ripemd160(buffer) {
-            const hex = Array.from(buffer)
-                .map(b => b.toString(16).padStart(2, '0'))
-                .join('');
-            const hash = CryptoJS.RIPEMD160(CryptoJS.enc.Hex.parse(hex));
-            return new Uint8Array(hash.toString(CryptoJS.enc.Hex).match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
-        }
-
-        const BASE58_ALPHABET = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-        function base58Encode(buffer) {
-            let n = BigInt(0);
-            for (const byte of buffer) {
-                n = n * BigInt(256) + BigInt(byte);
+        function npubToHex(npub) {
+            try {
+                const { prefix, words } = bech32.decode(npub);
+                if (prefix !== 'npub') {
+                    throw new Error('Invalid npub prefix');
+                }
+                const bytes = bech32.fromWords(words);
+                return bytesToHex(bytes);
+            } catch (error) {
+                throw new Error('Invalid npub format: ' + error.message);
             }
-            
-            let result = '';
-            while (n > 0) {
-                const remainder = Number(n % BigInt(58));
-                n = n / BigInt(58);
-                result = BASE58_ALPHABET[remainder] + result;
-            }
-            
-            for (let i = 0; i < buffer.length && buffer[i] === 0; i++) {
-                result = '1' + result;
-            }
-            
-            return result;
         }
 
         function pubkeyToLegacyAddress(pubkeyHex) {
-            try {
-                const pubkeyBytes = hexToBytes(pubkeyHex);
-                const sha256Hash = sha256(pubkeyBytes);
-                const ripemdHash = ripemd160(sha256Hash);
-                const versionByte = new Uint8Array([0x00, ...ripemdHash]);
-                const checksum = sha256(sha256(versionByte)).slice(0, 4);
-                const finalBytes = new Uint8Array([...versionByte, ...checksum]);
-                return base58Encode(finalBytes);
-            } catch (error) {
-                throw new Error(`Failed to generate legacy address: ${error.message}`);
-            }
+            // Convert hex pubkey to bytes
+            const pubkeyBytes = hexToBytes(pubkeyHex);
+            
+            // SHA256
+            const sha256 = CryptoJS.SHA256(CryptoJS.lib.WordArray.create(pubkeyBytes));
+            
+            // RIPEMD160
+            const ripemd160 = CryptoJS.RIPEMD160(sha256);
+            
+            // Add version byte (0x00 for mainnet)
+            const versionedHash = new Uint8Array([0, ...hexToBytes(ripemd160.toString())]);
+            
+            // Double SHA256 for checksum
+            const checksum = CryptoJS.SHA256(CryptoJS.SHA256(CryptoJS.lib.WordArray.create(versionedHash)));
+            const checksumBytes = hexToBytes(checksum.toString()).slice(0, 4);
+            
+            // Combine everything
+            const binaryAddr = new Uint8Array([...versionedHash, ...checksumBytes]);
+            
+            // Base58 encode
+            return base58.encode(binaryAddr);
         }
 
         function pubkeyToSegwitAddress(pubkeyHex) {
-            try {
-                const pubkeyBytes = hexToBytes(pubkeyHex);
-                const sha256Hash = sha256(pubkeyBytes);
-                const ripemdHash = ripemd160(sha256Hash);
-                const words = bech32.toWords(ripemdHash);
-                const version = 0;
-                const data = [version, ...words];
-                return bech32.encode('bc', data);
-            } catch (error) {
-                throw new Error(`Failed to generate SegWit address: ${error.message}`);
+            // Convert hex pubkey to bytes
+            const pubkeyBytes = hexToBytes(pubkeyHex);
+            
+            // SHA256
+            const sha256 = CryptoJS.SHA256(CryptoJS.lib.WordArray.create(pubkeyBytes));
+            
+            // RIPEMD160
+            const ripemd160 = CryptoJS.RIPEMD160(sha256);
+            const program = hexToBytes(ripemd160.toString());
+            
+            // Convert to 5-bit words
+            const words = [];
+            for (let i = 0; i < program.length; ++i) {
+                for (let j = 0; j < 8; ++j) {
+                    words.push((program[i] >> (7 - j)) & 1);
+                }
             }
+            
+            // Group into 5-bit words
+            const grouped = [];
+            for (let i = 0; i < words.length; i += 5) {
+                let value = 0;
+                for (let j = 0; j < 5; ++j) {
+                    if (i + j < words.length) {
+                        value = (value << 1) | words[i + j];
+                    }
+                }
+                grouped.push(value);
+            }
+            
+            // Create checksum
+            const checksum = createChecksum('bc', grouped);
+            
+            // Combine everything
+            return 'bc1' + [...grouped, ...checksum].map(i => CHARSET[i]).join('');
         }
 
-        // UI Functions
-        async function convertKey() {
-            const nostrKey = document.getElementById('nostrKey').value;
+        function convertKey() {
+            const input = document.getElementById('nostrKey').value.trim();
             const errorDiv = document.getElementById('error');
             const resultsDiv = document.getElementById('results');
-
+            
             try {
-                errorDiv.textContent = '';
-                if (!nostrKey.startsWith('npub1') && !nostrKey.startsWith('nsec1')) {
-                    throw new Error('Invalid Nostr key format. Must start with npub1 or nsec1');
-                }
-
-                const pubkeyHex = npubToHex(nostrKey);
+                // Convert npub to hex pubkey
+                const pubkeyHex = npubToHex(input);
+                
+                // Generate addresses
                 const legacyAddress = pubkeyToLegacyAddress(pubkeyHex);
                 const segwitAddress = pubkeyToSegwitAddress(pubkeyHex);
-
+                
+                // Update UI
                 document.getElementById('legacyAddress').textContent = legacyAddress;
                 document.getElementById('segwitAddress').textContent = segwitAddress;
-
+                
                 // Generate QR codes
                 document.getElementById('legacyQR').innerHTML = '';
                 document.getElementById('segwitQR').innerHTML = '';
+                
                 new QRCode(document.getElementById('legacyQR'), {
                     text: legacyAddress,
                     width: 128,
                     height: 128
                 });
+                
                 new QRCode(document.getElementById('segwitQR'), {
                     text: segwitAddress,
                     width: 128,
                     height: 128
                 });
-
+                
+                // Show results
+                errorDiv.textContent = '';
                 resultsDiv.style.display = 'block';
+                
             } catch (error) {
                 errorDiv.textContent = error.message;
                 resultsDiv.style.display = 'none';
@@ -420,9 +464,9 @@
             }
         }
 
-        // Add enter key support
-        document.getElementById('nostrKey').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
+        // Add Enter key support for input
+        document.getElementById('nostrKey').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
                 convertKey();
             }
         });
